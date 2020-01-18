@@ -132,8 +132,12 @@ classdef LQTAgent < rl.agent.CustomAgent
                 % Reset the experience buffers
                 obj.Counter = 1;
                 obj.YBuffer = zeros(N,1);
-                obj.HBuffer = zeros(N,0.5*num*(num+1));    
+                obj.HBuffer = zeros(N,0.5*num*(num+1));
                 
+                % ゲインKの更新幅が一定以下になったら学習終了
+                if (norm((obj.KBuffer{obj.KUpdate}-obj.KBuffer{obj.KUpdate-1})) < 1e-5)
+                    setStepMode(obj,"sim");
+                end
             end
 
             % Find and return an action with exploration
