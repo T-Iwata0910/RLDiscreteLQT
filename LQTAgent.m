@@ -39,6 +39,10 @@ classdef LQTAgent < rl.agent.CustomAgent
 
         % Number for estimator update
         EstimateNum = 21
+        
+        % Stop learning value
+        % ゲインの更新幅がこの値以下になったら学習を終了する
+        stopLearningValue
     end
     
     properties (Access = private)
@@ -52,9 +56,11 @@ classdef LQTAgent < rl.agent.CustomAgent
     %% MAIN METHODS
     methods
         % Constructor
-        function obj = LQTAgent(Q,R,InitialK)
-            % Check the number of input arguments
-            narginchk(3,3);
+        function obj = LQTAgent(Q,R,InitialK,varargin)
+            % input parser
+            p = inputParser;
+            addParameter(p, 'StopLearningValue', 1e-5, @isnumeric);
+            parse(p, varargin{:});
 
             % Call the abstract class constructor
             obj = obj@rl.agent.CustomAgent();
@@ -72,6 +78,9 @@ classdef LQTAgent < rl.agent.CustomAgent
 
             % Initialize the gain matrix
             obj.K = InitialK;
+            
+            % Initialize learning parameters
+            obj.stopLearningValue = p.Results.StopLearningValue;
 
             % Initialize the experience buffers
             obj.YBuffer = zeros(obj.EstimateNum,1);
@@ -135,7 +144,9 @@ classdef LQTAgent < rl.agent.CustomAgent
                 obj.HBuffer = zeros(N,0.5*num*(num+1));
                 
                 % ゲインKの更新幅が一定以下になったら学習終了
-                if (norm((obj.KBuffer{obj.KUpdate}-obj.KBuffer{obj.KUpdate-1})) < 1e-5)
+                kNorm = norm((obj.KBuffer{obj.KUpdate}- ...
+                    obj.KBuffer{obj.KUpdate-1}));
+                if (kNorm < obj.stopLearningValue)
                     setStepMode(obj,"sim");
                 end
             end
