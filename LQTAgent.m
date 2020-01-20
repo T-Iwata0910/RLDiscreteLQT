@@ -31,7 +31,11 @@ classdef LQTAgent < rl.agent.CustomAgent
 
         % Critic
         Critic
-
+        
+        % TD error buffer
+        TDBuffer
+        TDBufferSize = 1
+        
         % Buffer for K
         KBuffer  
         % Number of updates for K
@@ -109,7 +113,14 @@ classdef LQTAgent < rl.agent.CustomAgent
             dx = exp{4}{1};            
             y = (x'*obj.Q*x + u'*obj.R*u);
             num = size(obj.Q,1) + size(obj.R,1);
-
+            
+            % Caluclate TD error
+            TDError = y + obj.Gamma * evaluate(obj.Critic, {dx, -obj.K*dx}) ...
+                - evaluate(obj.Critic, {x, u});
+            obj.TDBuffer(obj.TDBufferSize) = TDError;
+            obj.TDBufferSize = obj.TDBufferSize + 1;
+            
+            
             % Wait N steps before updating critic parameters
             N = obj.EstimateNum;
             % In the linear case, critic evaluated at (x,u) is Q1 = theta'*h1,
