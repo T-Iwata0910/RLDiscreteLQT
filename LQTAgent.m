@@ -110,12 +110,12 @@ classdef LQTAgent < rl.agent.CustomAgent
             % Parse the experience input
             x = exp{1}{1};
             u = exp{2}{1};
+            r = exp{3};
             dx = exp{4}{1};            
-            y = (x'*obj.Q*x + u'*obj.R*u);
             num = size(obj.Q,1) + size(obj.R,1);
             
             % Caluclate TD error
-            TDError = y + obj.Gamma * evaluate(obj.Critic, {dx, -obj.K*dx}) ...
+            TDError = r + obj.Gamma * evaluate(obj.Critic, {dx, -obj.K*dx}) ...
                 - evaluate(obj.Critic, {x, u});
             obj.TDBuffer(obj.TDBufferSize) = TDError;
             obj.TDBufferSize = obj.TDBufferSize + 1;
@@ -131,7 +131,7 @@ classdef LQTAgent < rl.agent.CustomAgent
             h2 = computeQuadraticBasis(dx,-obj.K*dx,num);
             H = h1 - obj.Gamma* h2;
             if obj.Counter<=N
-                obj.YBuffer(obj.Counter) = y;
+                obj.YBuffer(obj.Counter) = r;
                 obj.HBuffer(obj.Counter,:) = H;
                 obj.Counter = obj.Counter + 1;
             else
