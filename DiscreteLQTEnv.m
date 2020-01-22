@@ -1,6 +1,4 @@
 classdef DiscreteLQTEnv < rl.env.MATLABEnvironment
-    %DISCRETELQTENV: Template for defining custom environment in MATLAB.    
-    
     %% Properties (set properties' attributes accordingly)
     properties
         % Specify and initialize environment's necessary properties    

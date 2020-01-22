@@ -1,20 +1,4 @@
-classdef LQTAgent < rl.agent.CustomAgent
-    % LQRCustomAgent: Creates an LQR Agent for a linear system.
-    %
-    %   agent = LQRCustomAgent(Q,R,w0) creates a LQR agent
-    %             Q is a n-by-n positive definite matrix 
-    %             R is a n-by-n positive definite matrix 
-    %             K0 is an initial stabilizing feedback gain
-    %
-    %      * For a discrete-time state-space model SYS, the state-feedback
-    %        law u = -Kx  minimizes the cost function
-    %
-    %             J = Sum {x'Qx + u'Ru}
-    %
-    %        subject to the state dynamics   x[n+1] = Ax[n] + Bu[n].
-    
-    % Copyright 2018-2019 The MathWorks Inc.
-    
+classdef LQTAgent < rl.agent.CustomAgent    
     %% Public Properties
     properties
         % Q
