@@ -102,6 +102,7 @@ classdef LQTAgent < rl.agent.CustomAgent
                 num = size(obj.Q,1) + size(obj.R,1);
                 yBuf = zeros(obj.experienceBufferCount,1);
                 hBuf = zeros(obj.experienceBufferCount,0.5*num*(num+1));
+                TDError = zeros(obj.experienceBufferCount, 1);
                 for i = 1 : obj.experienceBufferCount
                     % Parse the experience input
                     x = obj.experienceBuffer{i}{1}{1};
@@ -119,6 +120,11 @@ classdef LQTAgent < rl.agent.CustomAgent
                     
                     yBuf(i, 1) = r;
                     hBuf(i, :) = H;
+                    
+                    % TDŒë·‚ðŒvŽZ
+                    TDError(i) = r + obj.Gamma * ...
+                        evaluate(obj.Critic, {dx, -obj.K*dx}) - ...
+                            evaluate(obj.Critic, {x, u});
                 end
                 
                 % Update the critic parameters based on the batch of
@@ -132,11 +138,9 @@ classdef LQTAgent < rl.agent.CustomAgent
                     obj.KUpdate = obj.KUpdate + 1;
                     obj.KBuffer{obj.KUpdate} = obj.K;
                 end
-%                 % Caluclate TD error
-%             TDError = r + obj.Gamma * evaluate(obj.Critic, {dx, -obj.K*dx}) ...
-%                 - evaluate(obj.Critic, {x, u});
-%             obj.TDBuffer(obj.TDBufferSize) = TDError;
-%             obj.TDBufferSize = obj.TDBufferSize + 1;
+                % Caluclate TD error
+                obj.TDBuffer(obj.TDBufferSize) = mean(abs(TDError));
+                obj.TDBufferSize = obj.TDBufferSize + 1;
                 
                 % Reset the experience buffers
                 obj.experienceBufferCount = 0;
