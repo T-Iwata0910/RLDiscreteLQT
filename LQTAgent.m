@@ -26,7 +26,7 @@ classdef LQTAgent < rl.agent.CustomAgent
         KUpdate = 1
 
         % Number for estimator update
-        EstimateNum = 21
+        EstimateNum = 20
         
         % Stop learning value
         % ゲインの更新幅がこの値以下になったら学習を終了する
@@ -35,9 +35,8 @@ classdef LQTAgent < rl.agent.CustomAgent
     
     properties (Access = private)
         stepMode
-        Counter = 1
-        YBuffer
-        HBuffer 
+        experienceBuffer
+        experienceBufferCount = 0
     end
     
     
@@ -70,10 +69,7 @@ classdef LQTAgent < rl.agent.CustomAgent
             % Initialize learning parameters
             obj.stopLearningValue = p.Results.StopLearningValue;
 
-            % Initialize the experience buffers
-            obj.YBuffer = zeros(obj.EstimateNum,1);
-            num = size(Q,1) + size(R,1);
-            obj.HBuffer = zeros(obj.EstimateNum,0.5*num*(num+1));
+            % Initialize the log buffers
             obj.KBuffer = cell(1,1000);
             obj.KBuffer{1} = obj.K;
         end
@@ -91,40 +87,44 @@ classdef LQTAgent < rl.agent.CustomAgent
         % learn from current experiences, return action with exploration
         % exp = {state,action,reward,nextstate,isdone}
         function action = learnImpl(obj,exp)
-            % Parse the experience input
-            x = exp{1}{1};
-            u = exp{2}{1};
-            r = exp{3};
-            dx = exp{4}{1};            
-            num = size(obj.Q,1) + size(obj.R,1);
             
-            % Caluclate TD error
-            TDError = r + obj.Gamma * evaluate(obj.Critic, {dx, -obj.K*dx}) ...
-                - evaluate(obj.Critic, {x, u});
-            obj.TDBuffer(obj.TDBufferSize) = TDError;
-            obj.TDBufferSize = obj.TDBufferSize + 1;
+            
+            % Store in experience buffer
+            obj.experienceBufferCount = obj.experienceBufferCount + 1;
+            obj.experienceBuffer{obj.experienceBufferCount} = exp;
+            
             
             
             % Wait N steps before updating critic parameters
             N = obj.EstimateNum;
-            % In the linear case, critic evaluated at (x,u) is Q1 = theta'*h1,
-            % critic evaluated at (dx,-K*dx) is Q2 = theta'*h2. The target
-            % is to obtain theta such that Q1 - gamma*Q2 = y, that is,
-            % theta'*H = y. Following is the least square solution.
-            h1 = computeQuadraticBasis(x,u,num);
-            h2 = computeQuadraticBasis(dx,-obj.K*dx,num);
-            H = h1 - obj.Gamma* h2;
-            if obj.Counter<=N
-                obj.YBuffer(obj.Counter) = r;
-                obj.HBuffer(obj.Counter,:) = H;
-                obj.Counter = obj.Counter + 1;
-            else
+            
+            if obj.experienceBufferCount>=N
+                num = size(obj.Q,1) + size(obj.R,1);
+                yBuf = zeros(obj.experienceBufferCount,1);
+                hBuf = zeros(obj.experienceBufferCount,0.5*num*(num+1));
+                for i = 1 : obj.experienceBufferCount
+                    % Parse the experience input
+                    x = obj.experienceBuffer{i}{1}{1};
+                    u = obj.experienceBuffer{i}{2}{1};
+                    r = obj.experienceBuffer{i}{3};
+                    dx = obj.experienceBuffer{i}{4}{1};
+                    
+                    % In the linear case, critic evaluated at (x,u) is Q1 = theta'*h1,
+                    % critic evaluated at (dx,-K*dx) is Q2 = theta'*h2. The target
+                    % is to obtain theta such that Q1 - gamma*Q2 = y, that is,
+                    % theta'*H = y. Following is the least square solution.
+                    h1 = computeQuadraticBasis(x,u,num);
+                    h2 = computeQuadraticBasis(dx,-obj.K*dx,num);
+                    H = h1 - obj.Gamma* h2;
+                    
+                    yBuf(i, 1) = r;
+                    hBuf(i, :) = H;
+                end
+                
                 % Update the critic parameters based on the batch of
                 % experiences
-                H_buf = obj.HBuffer;
-                y_buf = obj.YBuffer;
-                if (rcond(H_buf'*H_buf) > 1e-16)  % 逆行列が求められない時
-                    theta = (H_buf'*H_buf)\H_buf'*y_buf;
+                if (rcond(hBuf'*hBuf) > 1e-16)  % 逆行列が求められない時
+                    theta = (hBuf'*hBuf)\hBuf'*yBuf;
                     setLearnableParameterValues(obj.Critic,{theta});
 
                     % Derive a new gain matrix based on the new critic parameters
@@ -132,11 +132,15 @@ classdef LQTAgent < rl.agent.CustomAgent
                     obj.KUpdate = obj.KUpdate + 1;
                     obj.KBuffer{obj.KUpdate} = obj.K;
                 end
+%                 % Caluclate TD error
+%             TDError = r + obj.Gamma * evaluate(obj.Critic, {dx, -obj.K*dx}) ...
+%                 - evaluate(obj.Critic, {x, u});
+%             obj.TDBuffer(obj.TDBufferSize) = TDError;
+%             obj.TDBufferSize = obj.TDBufferSize + 1;
                 
                 % Reset the experience buffers
-                obj.Counter = 1;
-                obj.YBuffer = zeros(N,1);
-                obj.HBuffer = zeros(N,0.5*num*(num+1));
+                obj.experienceBufferCount = 0;
+                obj.experienceBuffer = cell(N, 1);
                 
                 % ゲインKの更新幅が一定以下になったら学習終了
                 kNorm = norm((obj.KBuffer{obj.KUpdate}- ...
@@ -145,7 +149,7 @@ classdef LQTAgent < rl.agent.CustomAgent
                     setStepMode(obj,"sim");
                 end
             end
-
+            
             % Find and return an action with exploration
             action = getActionWithExploration(obj,exp{4});
         end
