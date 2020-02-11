@@ -1,4 +1,4 @@
-function Options = rlLQTAgentOptions(varagin)
+function Options = rlLQTAgentOptions(varargin)
 % rlLQTAgentOptions: Create options for LQT control Agent.
 %
 %   OPT = rlLQTAgentOptions returns the default options for rlLQTAgent. 
@@ -22,6 +22,6 @@ function Options = rlLQTAgentOptions(varagin)
 
 % Copyright 2020 T.Iwata
 
-Options = rl.options.rlLQTAgnetOption(varagin{:});
+Options = rl.option.rlLQTAgentOptions(varargin{:});
 
 end

@@ -37,12 +37,12 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
             obj.Parser = parser;
             obj.EstimateNum = parser.Results.EstimateNum;
             
-            parse.KeepUnmatched = false;
+            parser.KeepUnmatched = false;
             parse(parser, varargin{:});
         end
         % TODO: Impriment varidate function
-        function obj = set.EstimateNum(obj, Value)
-            validateattributes(Value, {'scalar'})
-        end
+%         function obj = set.EstimateNum(obj, Value)
+%             validateattributes(Value, {'scalar'})
+%         end
     end
 end
