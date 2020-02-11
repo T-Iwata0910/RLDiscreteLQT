@@ -21,3 +21,7 @@ function Options = rlLQTAgentOptions(varagin)
 % %   See also: rlSARSAAgent, rlDDPGAgentOptions, rlPGAgentOptions, rlACAgentOptions
 
 % Copyright 2020 T.Iwata
+
+Options = rl.options.rlLQTAgnetOption(varagin{:});
+
+end
