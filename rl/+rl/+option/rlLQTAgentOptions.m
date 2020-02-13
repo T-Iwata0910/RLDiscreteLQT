@@ -19,23 +19,23 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
     % %   DiscountFactor                      Discount factor to apply to future rewards during training
     % %
     % %   See also: rlSARSAAgent, rlDDPGAgentOptions, rlPGAgentOptions, rlACAgentOptions
-
-    % Copyright 2020 T.Iwata
+    
+    % ver1.0.0 2020-02-11 T.Iwata Test create
     
     properties
         % Number for estimator update
-        EstimateNum
+        StepNumPerIteration
     end
     
     methods
         function obj = rlLQTAgentOptions(varargin)
             obj = obj@rl.option.AgentGeneric(varargin{:});
             parser = obj.Parser;
-            addParameter(parser, 'EstimateNum', 10), ...
+            addParameter(parser, 'StepNumPerIteration', 10), ...
              
             parse(parser, varargin{:})
             obj.Parser = parser;
-            obj.EstimateNum = parser.Results.EstimateNum;
+            obj.StepNumPerIteration = parser.Results.StepNumPerIteration;
             
             parser.KeepUnmatched = false;
             parse(parser, varargin{:});

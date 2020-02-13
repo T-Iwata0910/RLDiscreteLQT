@@ -8,7 +8,12 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     %   the specified options. To create OPTIONS, use rlLQTAgentOptions.
     %
     
-    % Copyright 2020 T.Iwata 
+    % ver1.0.0 2020-02-11 T.Iwata Test create
+    
+    % TODO
+    %   Experience bufferを実装
+    %   Init K を実装
+    %   w0の初期化法を実装
     
     %% Public Properties
     properties (Dependent)
@@ -16,13 +21,15 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         AgentOptions
     end
     
+    properties (Access = private)
+        % Private options to configure RL agent
+        AgentOptions_ = [];
+    end
+    
     properties
 
         % Feedback gain
         K
-
-        % Discount Factor
-        Gamma = 0.8
 
         % Critic
         Critic
@@ -36,16 +43,20 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         % Number of updates for K
         KUpdate = 1
 
-        % Number for estimator update
-        EstimateNum = 20
+        
         
         % Stop learning value
         % ゲインの更新幅がこの値以下になったら学習を終了する
         stopLearningValue
+        
     end
     
     properties (Access = private)
+        % 1イテレーションあたりのステップ数（この数で一度方策の更新を行う）
+        StepNumPerIteration
+        
         stepMode
+        
         experienceBuffer
         experienceBufferCount = 0
     end
@@ -54,37 +65,70 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     %% MAIN METHODS
     methods
         % Constructor
-        function obj = rlLQTAgent(Q,R,InitialK,varargin)
+        function this = rlLQTAgent(varargin)
             % input parser
-            p = inputParser;
-            addParameter(p, 'StopLearningValue', 1e-5, @isnumeric);
-            parse(p, varargin{:});
-
+            narginchk(2, 3);  % 引数の数を確認（最小:2, 最大:3）
             % Call the abstract class constructor
-            obj = obj@rl.agent.CustomAgent();
-
-            % Set the Q and R matrices
-            obj.Q = Q;
-            obj.R = R;
-
-            % Define the observation and action spaces
-            obj.ObservationInfo = rlNumericSpec([size(Q,1),1]);
-            obj.ActionInfo = rlNumericSpec([size(R,1),1]);
+            this = this@rl.agent.CustomAgent();
+            
+            % validate inputs
+            % see also: rl.util.parseAgentInputs.m
+            % infomation check
+            oaInfo = varargin(cellfun(@(x) isa(x, 'rl.util.RLDataSpec'), varargin));
+            if numel(oaInfo) ~= 2
+                error('Action or obsevation infomation is invalid');
+            end
+            
+            % options check
+            UseDefault = false;
+            opt = varargin(cellfun(@(x) isa(x, 'rl.option.AgentGeneric'), varargin));
+            
+            if numel(varargin)~=( numel(oaInfo)+numel(opt) )
+                error(message('rl:agent:errInvalidAgentInput'));
+            end
+            
+            if isempty(opt)
+                opt{1} = rlLQTAgentOptions;
+                UseDefault = true;
+            else
+                % check otption is compatible
+                if ~isa(opt{1}, 'rl.option.rlLQTAgentOptions')
+                    error(message('rl:agent:errMismatchedOption'));
+                end
+            end
+            
+            % set agent option
+            this.AgentOptions = opt{1};
+            
+            % set ActionInfo and ObservationInfo
+            this.ObservationInfo = oaInfo{1};
+            this.ActionInfo = oaInfo{2};
 
             % Create the critic representation
-            obj.Critic = createCritic(obj);
-
+            this.Critic = createCritic(this);
+% 
             % Initialize the gain matrix
-            obj.K = InitialK;
-            
-            % Initialize learning parameters
-            obj.stopLearningValue = p.Results.StopLearningValue;
-
+            this.K = rand(1, this.ObservationInfo.Dimension(1));
+%             
+%             % Initialize learning parameters
+%             this.stopLearningValue = p.Results.StopLearningValue;
+% 
             % Initialize the log buffers
-            obj.KBuffer = cell(1,1000);
-            obj.KBuffer{1} = obj.K;
+            this.KBuffer = cell(1,1000);
+            this.KBuffer{1} = this.K;
         end
+        
+        function set.AgentOptions(this, NewOptions)
+            validateattributes(NewOptions,{'rl.option.rlLQTAgentOptions'},{'scalar'},'','AgentOptions');
+            
+            this.AgentOptions_ = NewOptions;
+            this.SampleTime = NewOptions.SampleTime;
+            this.StepNumPerIteration = NewOptions.StepNumPerIteration;
         end
+        function Options = get.AgentOptions(this)
+            Options = this.AgentOptions_;
+        end
+    end
     
     %% Implementation of abstract parent protected methods
     methods (Access = protected)
@@ -98,7 +142,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         % learn from current experiences, return action with exploration
         % exp = {state,action,reward,nextstate,isdone}
         function action = learnImpl(obj,exp)
-            
+            gamma = obj.AgentOptions.DiscountFactor;
             
             % Store in experience buffer
             obj.experienceBufferCount = obj.experienceBufferCount + 1;
@@ -127,13 +171,13 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                     % theta'*H = y. Following is the least square solution.
                     h1 = computeQuadraticBasis(x,u,num);
                     h2 = computeQuadraticBasis(dx,-obj.K*dx,num);
-                    H = h1 - obj.Gamma* h2;
+                    H = h1 - gamma* h2;
                     
                     yBuf(i, 1) = r;
                     hBuf(i, :) = H;
                     
                     % TD誤差を計算
-                    TDError(i) = r + obj.Gamma * ...
+                    TDError(i) = r + gamma * ...
                         evaluate(obj.Critic, {dx, -obj.K*dx}) - ...
                             evaluate(obj.Critic, {x, u});
                 end
@@ -170,9 +214,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         end
         % Create critic 
         function critic = createCritic(obj)
-            nQ = size(obj.Q,1);
-            nR = size(obj.R,1);
-            n = nQ+nR;
+            observeDim = obj.ObservationInfo.Dimension(1);
+            actionDim = obj.ActionInfo.Dimension(1);
+            n = observeDim+actionDim;
             w0 = 0.1*ones(0.5*(n+1)*n,1);
             critic = rlRepresentation(@(x,u) computeQuadraticBasis(x,u,n),w0,...
                 {obj.ObservationInfo,obj.ActionInfo});
@@ -183,9 +227,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         function k = getNewK(obj)
             w = getLearnableParameterValues(obj.Critic);
             w = w{1};
-            nQ = size(obj.Q,1);
-            nR = size(obj.R,1);
-            n = nQ+nR;
+            observeDim = obj.ObservationInfo.Dimension(1);
+            actionDim = obj.ActionInfo.Dimension(1);
+            n = observeDim+actionDim;
             idx = 1;
             for r = 1:n
                 for c = r:n

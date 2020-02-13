@@ -8,7 +8,7 @@ function Agent = rlLQTAgent(varargin)
     %   the specified options. To create OPTIONS, use rlLQTAgentOptions.
     %
     
-    % Copyright 2020 T.Iwata
+    % ver1.0.0 2020-02-11 T.Iwata Test create
 
 Agent = rl.agent.rlLQTAgent(varargin{:});
 
