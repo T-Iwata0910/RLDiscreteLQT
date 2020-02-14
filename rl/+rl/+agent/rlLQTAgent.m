@@ -106,9 +106,10 @@ classdef rlLQTAgent < rl.agent.CustomAgent
 
             % Create the critic representation
             this.Critic = createCritic(this);
-% 
+
             % Initialize the gain matrix
-            this.K = rand(1, this.ObservationInfo.Dimension(1));
+%             this.K = rand(1, this.ObservationInfo.Dimension(1));
+            this.K = [0.3 1.3 0.75];
 %             
 %             % Initialize learning parameters
 %             this.stopLearningValue = p.Results.StopLearningValue;
@@ -135,9 +136,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         function action = getActionWithExplorationImpl(obj,Observation)
             % Given the current observation, select an action
             action = getAction(obj,Observation);
+            
             % Add random noise to action
-            num = size(obj.R,1);
-            action = action + 2*randn(num,1);
+            action = action + 2*randn(size(action, 1),1);
         end
         % learn from current experiences, return action with exploration
         % exp = {state,action,reward,nextstate,isdone}
@@ -151,12 +152,12 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             
             
             % Wait N steps before updating critic parameters
-            N = obj.EstimateNum;
+            N = obj.StepNumPerIteration;
             
             if obj.experienceBufferCount>=N
-                num = size(obj.Q,1) + size(obj.R,1);
+                oaDim = obj.ObservationInfo.Dimension(1) + obj.ActionInfo.Dimension(1);
                 yBuf = zeros(obj.experienceBufferCount,1);
-                hBuf = zeros(obj.experienceBufferCount,0.5*num*(num+1));
+                hBuf = zeros(obj.experienceBufferCount,0.5*oaDim*(oaDim+1));
                 TDError = zeros(obj.experienceBufferCount, 1);
                 for i = 1 : obj.experienceBufferCount
                     % Parse the experience input
@@ -169,8 +170,8 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                     % critic evaluated at (dx,-K*dx) is Q2 = theta'*h2. The target
                     % is to obtain theta such that Q1 - gamma*Q2 = y, that is,
                     % theta'*H = y. Following is the least square solution.
-                    h1 = computeQuadraticBasis(x,u,num);
-                    h2 = computeQuadraticBasis(dx,-obj.K*dx,num);
+                    h1 = computeQuadraticBasis(x,u,oaDim);
+                    h2 = computeQuadraticBasis(dx,-obj.K*dx,oaDim);
                     H = h1 - gamma* h2;
                     
                     yBuf(i, 1) = r;
@@ -202,7 +203,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 obj.experienceBuffer = cell(N, 1);
                 
                 % ゲインKの更新幅が一定以下になったら学習終了
-                kNorm = norm((obj.KBuffer{obj.KUpdate}- ...
+                kNorm = norm((obj.KBuffer{obj.KUpdate} - ...
                     obj.KBuffer{obj.KUpdate-1}));
                 if (kNorm < obj.stopLearningValue)
                     setStepMode(obj,"sim");
@@ -238,9 +239,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 end
             end
             H  = 1/2*(Phat+Phat');
-            Huu = H(nQ+1:end,nQ+1:end);
-            Hux = H(nQ+1:end,1:nQ);
-            if rank(Huu) == nR
+            Huu = H(observeDim+1:end,observeDim+1:end);
+            Hux = H(observeDim+1:end,1:observeDim);
+            if rank(Huu) == actionDim
                 k = Huu\Hux;
             else
                 k = obj.K;

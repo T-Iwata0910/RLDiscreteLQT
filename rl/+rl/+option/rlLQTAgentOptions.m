@@ -36,6 +36,7 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
             parse(parser, varargin{:})
             obj.Parser = parser;
             obj.StepNumPerIteration = parser.Results.StepNumPerIteration;
+            obj.DiscountFactor = 0.8;
             
             parser.KeepUnmatched = false;
             parse(parser, varargin{:});
