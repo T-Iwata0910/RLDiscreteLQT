@@ -178,16 +178,21 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                     hBuf(i, :) = H;
                     
                     % TDåÎç∑ÇåvéZ
-                    TDError(i) = r + gamma * ...
-                        evaluate(obj.Critic, {dx, -obj.K*dx}) - ...
-                            evaluate(obj.Critic, {x, u});
+                    if verLessThan('rl', '1.2')
+                        TDError(i) = r + gamma * ...
+                            evaluate(obj.Critic, {dx, -obj.K*dx}) - ...
+                                evaluate(obj.Critic, {x, u});
+                    else
+                        buf = r + gamma * getValue(obj.Critic, {dx}, {-obj.K*dx}) - getValue(obj.Critic, {x}, {u});
+                        TDError(i) = buf.extractdata;
+                    end
                 end
                 
                 % Update the critic parameters based on the batch of
                 % experiences
                 if (rcond(hBuf'*hBuf) > 1e-16)  % ãtçsóÒÇ™ãÅÇﬂÇÁÇÍÇ»Ç¢éû
                     theta = (hBuf'*hBuf)\hBuf'*yBuf;
-                    setLearnableParameterValues(obj.Critic,{theta});
+                    obj.Critic = setLearnableParameterValues(obj.Critic,{theta});
 
                     % Derive a new gain matrix based on the new critic parameters
                     obj.K = getNewK(obj);
@@ -221,8 +226,10 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             w0 = 0.1*ones(0.5*(n+1)*n,1);
             critic = rlRepresentation(@(x,u) computeQuadraticBasis(x,u,n),w0,...
                 {obj.ObservationInfo,obj.ActionInfo});
+            critic = rlQValueRepresentation({@(x,u) computeQuadraticBasis(x,u,n),w0},...
+                obj.ObservationInfo,obj.ActionInfo);
             critic.Options.GradientThreshold = 1;
-            critic = critic.setLoss('mse');
+%             critic = critic.setLoss('mse');
         end
         % Update K from critic
         function k = getNewK(obj)

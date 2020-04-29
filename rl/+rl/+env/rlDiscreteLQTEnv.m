@@ -1,4 +1,4 @@
-classdef DiscreteLQTEnv < rl.env.MATLABEnvironment
+classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
     %% Properties (set properties' attributes accordingly)
     properties
         % Specify and initialize environment's necessary properties    
@@ -26,7 +26,7 @@ classdef DiscreteLQTEnv < rl.env.MATLABEnvironment
     methods              
         % Contructor method creates an instance of the environment
         % Change class name and constructor name accordingly
-        function this = DiscreteLQTEnv(Ad, Bd, Cd, Fd, Q, R, varargin)
+        function this = rlDiscreteLQTEnv(Ad, Bd, Cd, Fd, Q, R, varargin)
             % input parser
             obsDim = size(Ad, 2) + size(Fd, 2);
             checkX0 = @(x) size(x, 1) == obsDim;
