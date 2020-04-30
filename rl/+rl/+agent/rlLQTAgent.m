@@ -7,13 +7,16 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     %   agent = rlLQTAgent(CRITIC,OPTIONS) creates a LQT agent with
     %   the specified options. To create OPTIONS, use rlLQTAgentOptions.
     %
-    
+    %   agent = rlLQTAgent(CRITIC,OPTIONS, K0) creates a LQT agent with
+    %   the specified options and initial weight. To create OPTIONS, use rlLQTAgentOptions.
+    %
     % ver1.0.0 2020-02-11 T.Iwata Test create
+    % ver1.1.0 2020-04-30 T.Iwata Add new option: initial representation weight
+    
+    
     
     % TODO
     %   Experience bufferを実装
-    %   Init K を実装
-    %   w0の初期化法を実装
     
     %% Public Properties
     properties (Dependent)
@@ -67,7 +70,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         % Constructor
         function this = rlLQTAgent(varargin)
             % input parser
-            narginchk(2, 3);  % 引数の数を確認（最小:2, 最大:3）
+            narginchk(2, 4);  % 引数の数を確認（最小:2, 最大:3）
             % Call the abstract class constructor
             this = this@rl.agent.CustomAgent();
             
@@ -83,7 +86,11 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             UseDefault = false;
             opt = varargin(cellfun(@(x) isa(x, 'rl.option.AgentGeneric'), varargin));
             
-            if numel(varargin)~=( numel(oaInfo)+numel(opt) )
+            % initial weight check
+            k0 = varargin(cellfun(@(x) isa(x, 'numeric'), varargin));
+            
+            % whole check
+            if numel(varargin)~=( numel(oaInfo)+numel(opt)+numel(k0) )
                 error(message('rl:agent:errInvalidAgentInput'));
             end
             
@@ -95,6 +102,13 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 if ~isa(opt{1}, 'rl.option.rlLQTAgentOptions')
                     error(message('rl:agent:errMismatchedOption'));
                 end
+            end
+            
+            if isempty(k0)
+                k0 = rand(1, oaInfo{1}.Dimension(1));
+            else
+                k0 = k0{1};
+                validateattributes(k0, {'numeric'}, {'ncols', oaInfo{1}.Dimension(1)}, '', 'k0');
             end
             
             % set agent option
@@ -109,7 +123,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
 
             % Initialize the gain matrix
 %             this.K = rand(1, this.ObservationInfo.Dimension(1));
-            this.K = [0.3 1.3 0.75];
+            this.K = k0;
 %             
 %             % Initialize learning parameters
 %             this.stopLearningValue = p.Results.StopLearningValue;
