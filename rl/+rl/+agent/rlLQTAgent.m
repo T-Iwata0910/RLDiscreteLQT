@@ -12,8 +12,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     %
     % ver1.0.0 2020-02-11 T.Iwata Test create
     % ver1.1.0 2020-04-30 T.Iwata Add new option: initial representation weight
-    
-    
+    % ver1.2.0 2020-05-02 T.Iwata ExperienceをAgentに保存できるように変更
     
     % TODO
     %   Experience bufferを実装
@@ -57,6 +56,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     properties (Access = private)
         % 1イテレーションあたりのステップ数（この数で一度方策の更新を行う）
         StepNumPerIteration
+        SaveExperiences
         
         stepMode
         
@@ -139,6 +139,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             this.AgentOptions_ = NewOptions;
             this.SampleTime = NewOptions.SampleTime;
             this.StepNumPerIteration = NewOptions.StepNumPerIteration;
+            this.SaveExperiences = NewOptions.SaveExperiences;
         end
         function Options = get.AgentOptions(this)
             Options = this.AgentOptions_;
@@ -274,9 +275,17 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             % Given the current state of the system, return an action.
             action = -obj.K*Observation{:};
         end
- 
-    end
         
+        function resetImpl(this)
+            % 学習開始時に1度だけ実行
+            
+            % 実験データをロギング
+            % ※RL toolboxのtrainで学習した時には使用することができない(途中で捨てられる)
+            if this.SaveExperiences
+                attachLogger(this, this.MaxSteps);
+            end
+        end
+    end    
 end
 
 %% local function

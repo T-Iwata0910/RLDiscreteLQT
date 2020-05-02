@@ -10,11 +10,13 @@ function Options = rlLQTAgentOptions(varargin)
 %
 % %   DiscountFactor                      Discount factor to apply to future rewards during training
 % %   StepNumPreIteration                 1イテレーションあたりのステップ数
+% %   SaveExperiences                     ExperienceをAgentに保存するオプション
 % %
 % %   See also: 
 
 % ver1.0.0 2020-02-11 T.Iwata Test create
 % ver1.1.0 2020-04-30 割引率を追加
+% ver1.1.0 2020-05-02 ExperienceをAgentに保存するオプションを追加
 
 Options = rl.option.rlLQTAgentOptions(varargin{:});
 

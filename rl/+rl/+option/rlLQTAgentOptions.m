@@ -10,16 +10,18 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
     %
     % %   DiscountFactor                      Discount factor to apply to future rewards during training
     % %   StepNumPreIteration                 1イテレーションあたりのステップ数
+    % %   SaveExperiences                     ExperienceをAgentに保存するオプション
     % %
     % %   See also: 
     
     % ver1.0.0 2020-02-11 T.Iwata Test create
     % ver1.1.0 2020-04-30 割引率を追加
-    
+    % ver1.1.0 2020-05-02 ExperienceをAgentに保存するオプションを追加
     
     properties
         % Number for estimator update
         StepNumPerIteration
+        SaveExperiences
     end
     
     methods
@@ -28,23 +30,29 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
             parser = obj.Parser;
             
             addParameter(parser, 'StepNumPerIteration', 10);
+            addParameter(parser, 'SaveExperiences', false);
+            
             
             parse(parser, varargin{:});
             obj.Parser = parser;
             obj.StepNumPerIteration = parser.Results.StepNumPerIteration;
+            obj.SaveExperiences = parser.Results.SaveExperiences;
             obj.DiscountFactor =  parser.Results.DiscountFactor;
             
             parser.KeepUnmatched = false;
             parse(parser, varargin{:});
         end
-        % TODO: Impriment varidate function
-        % Varidate function
+
+        % Varidate functions
         function obj = set.StepNumPerIteration(obj, value)
             validateattributes(value, {'numeric'}, {'scalar', 'real', 'integer', 'positive', 'finite'}, '', 'StepNumPerIteration');
             obj.StepNumPerIteration = value;
         end
-%         function obj = set.EstimateNum(obj, Value)
-%             validateattributes(Value, {'scalar'})
-%         end
+        
+        function obj = set.SaveExperiences(obj, value)
+            validateattributes(value, {'logical'}, {'scalar'}, '', 'SaveExperiences');
+            obj.SaveExperiences = value;
+        end
+        
     end
 end
