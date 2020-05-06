@@ -13,6 +13,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     % ver1.0.0 2020-02-11 T.Iwata Test create
     % ver1.1.0 2020-04-30 T.Iwata Add new option: initial representation weight
     % ver1.2.0 2020-05-02 T.Iwata ExperienceをAgentに保存できるように変更
+    % ver1.2.1 2020-05-06 T.Iwata 旧バージョンでQ関数の初期化ができなくなってしまった現象を修正
     
     % TODO
     %   Experience bufferを実装
@@ -239,10 +240,14 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             actionDim = obj.ActionInfo.Dimension(1);
             n = observeDim+actionDim;
             w0 = 0.1*ones(0.5*(n+1)*n,1);
-            critic = rlRepresentation(@(x,u) computeQuadraticBasis(x,u,n),w0,...
-                {obj.ObservationInfo,obj.ActionInfo});
-            critic = rlQValueRepresentation({@(x,u) computeQuadraticBasis(x,u,n),w0},...
-                obj.ObservationInfo,obj.ActionInfo);
+            
+            if verLessThan('rl', '1.2')
+                critic = rlRepresentation(@(x,u) computeQuadraticBasis(x,u,n),w0,...
+                    {obj.ObservationInfo,obj.ActionInfo});
+            else
+                critic = rlQValueRepresentation({@(x,u) computeQuadraticBasis(x,u,n),w0},...
+                    obj.ObservationInfo,obj.ActionInfo);
+            end
             critic.Options.GradientThreshold = 1;
 %             critic = critic.setLoss('mse');
         end
