@@ -14,6 +14,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     % ver1.1.0 2020-04-30 T.Iwata Add new option: initial representation weight
     % ver1.2.0 2020-05-02 T.Iwata ExperienceをAgentに保存できるように変更
     % ver1.2.1 2020-05-06 T.Iwata 旧バージョンでQ関数の初期化ができなくなってしまった現象を修正
+    % ver1.3.0 2020-05-25 T.Iwata ノイズモデルを追加し，Optionで設定できるように変更
     
     % TODO
     %   Experience bufferを実装
@@ -36,6 +37,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
 
         % Critic
         Critic
+        
+        % NoiseModel
+        NoiseModel
         
         % TD error buffer
         TDBuffer
@@ -112,18 +116,17 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 validateattributes(k0, {'numeric'}, {'ncols', oaInfo{1}.Dimension(1)}, '', 'k0');
             end
             
-            % set agent option
-            this.AgentOptions = opt{1};
-            
             % set ActionInfo and ObservationInfo
             this.ObservationInfo = oaInfo{1};
             this.ActionInfo = oaInfo{2};
-
+            
+            % set agent option(ノイズモデルのインスタンスでthis.ActionInfoを使用するのでActionInfoの設定を終えてから)
+            this.AgentOptions = opt{1};
+            
             % Create the critic representation
             this.Critic = createCritic(this);
 
             % Initialize the gain matrix
-%             this.K = rand(1, this.ObservationInfo.Dimension(1));
             this.K = k0;
 %             
 %             % Initialize learning parameters
@@ -137,10 +140,25 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         function set.AgentOptions(this, NewOptions)
             validateattributes(NewOptions,{'rl.option.rlLQTAgentOptions'},{'scalar'},'','AgentOptions');
             
+            % check to see if we need to rebuild the noise model
+            rebuildNoise = isempty(this.NoiseModel) || ...
+                ~isequal(this.AgentOptions_.NoiseOptions,NewOptions.NoiseOptions);
+            
             this.AgentOptions_ = NewOptions;
             this.SampleTime = NewOptions.SampleTime;
             this.StepNumPerIteration = NewOptions.StepNumPerIteration;
             this.SaveExperiences = NewOptions.SaveExperiences;
+            
+            % build the noise model if necessary
+            if rebuildNoise
+                % extract the noise options
+                noiseOpts = this.AgentOptions_.NoiseOptions;
+
+                % create the noise model
+                actionDims = {this.ActionInfo.Dimension}';
+                this.NoiseModel = rl.util.createNoiseModelFactory(...
+                    actionDims,noiseOpts,getSampleTime(this));
+            end
         end
         function Options = get.AgentOptions(this)
             Options = this.AgentOptions_;
@@ -154,8 +172,11 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             action = getAction(obj,Observation);
             
             % Add random noise to action
-            action = action + 2*randn(size(action, 1),1);
+            action = applyNoise(obj.NoiseModel, action);
+            % saturate the actions
+            action = saturate(obj.ActionInfo, action);
         end
+        
         % learn from current experiences, return action with exploration
         % exp = {state,action,reward,nextstate,isdone}
         function action = learnImpl(obj,exp)
@@ -206,7 +227,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 
                 % Update the critic parameters based on the batch of
                 % experiences
-                if (rcond(hBuf'*hBuf) > 1e-16)  % 逆行列が求められない時
+%                 if (rcond(hBuf'*hBuf) > 1e-16)  % 逆行列が求められない時
                     theta = (hBuf'*hBuf)\hBuf'*yBuf;
                     obj.Critic = setLearnableParameterValues(obj.Critic,{theta});
 
@@ -214,7 +235,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                     obj.K = getNewK(obj);
                     obj.KUpdate = obj.KUpdate + 1;
                     obj.KBuffer{obj.KUpdate} = obj.K;
-                end
+%                 end
                 % Caluclate TD error
                 obj.TDBuffer(obj.TDBufferSize) = mean(abs(TDError));
                 obj.TDBufferSize = obj.TDBufferSize + 1;
@@ -223,12 +244,12 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 obj.experienceBufferCount = 0;
                 obj.experienceBuffer = cell(N, 1);
                 
-                % ゲインKの更新幅が一定以下になったら学習終了
-                kNorm = norm((obj.KBuffer{obj.KUpdate} - ...
-                    obj.KBuffer{obj.KUpdate-1}));
-                if (kNorm < obj.stopLearningValue)
-                    setStepMode(obj,"sim");
-                end
+%                 % ゲインKの更新幅が一定以下になったら学習終了
+%                 kNorm = norm((obj.KBuffer{obj.KUpdate} - ...
+%                     obj.KBuffer{obj.KUpdate-1}));
+%                 if (kNorm < obj.stopLearningValue)
+%                     setStepMode(obj,"sim");
+%                 end
             end
             
             % Find and return an action with exploration
@@ -289,6 +310,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             if this.SaveExperiences
                 attachLogger(this, this.MaxSteps);
             end
+            
+            % reset the noise model
+            reset(this.NoiseModel);
         end
     end    
 end

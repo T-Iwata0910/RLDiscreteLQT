@@ -11,12 +11,19 @@ function Options = rlLQTAgentOptions(varargin)
 % %   DiscountFactor                      Discount factor to apply to future rewards during training
 % %   StepNumPreIteration                 1イテレーションあたりのステップ数
 % %   SaveExperiences                     ExperienceをAgentに保存するオプション
+% %   NoiseOptions                        Parameters for Ornstein Uhlenbeck noise
+% %       InitialAction                       Initial state of the noise model
+% %       Mean                                Mean of the noise model
+% %       MeanAttractionConstant              Constant used to attract the process toward the mean
+% %       Variance                            Variance of the random process
+% %       VarianceDecayRate                   Rate of noise variance decay with each step of the noise model 
 % %
-% %   See also: 
+% %   See also: rlLQTAgent
 
 % ver1.0.0 2020-02-11 T.Iwata Test create
 % ver1.1.0 2020-04-30 割引率を追加
 % ver1.1.0 2020-05-02 ExperienceをAgentに保存するオプションを追加
+% ver1.2.0 2020-05-25 ノイズのモデルを選択できるように変更
 
 Options = rl.option.rlLQTAgentOptions(varargin{:});
 
