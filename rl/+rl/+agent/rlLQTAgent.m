@@ -15,19 +15,14 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     % ver1.2.0 2020-05-02 T.Iwata ExperienceをAgentに保存できるように変更
     % ver1.2.1 2020-05-06 T.Iwata 旧バージョンでQ関数の初期化ができなくなってしまった現象を修正
     % ver1.3.0 2020-05-25 T.Iwata ノイズモデルを追加し，Optionで設定できるように変更
+    % ver1.3.1 2020-05-31 T.Iwata ExperienceBufferをRL toolboxのものに変更
     
     % TODO
-    %   Experience bufferを実装
     
     %% Public Properties
     properties (Dependent)
         % Options to configure RL agent
         AgentOptions
-    end
-    
-    properties (Access = private)
-        % Private options to configure RL agent
-        AgentOptions_ = [];
     end
     
     properties
@@ -59,14 +54,15 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     end
     
     properties (Access = private)
+        % Private options to configure RL agent
+        AgentOptions_ = [];
+        
+        % Circular buffer
+        ExperienceBuffer
+        
         % 1イテレーションあたりのステップ数（この数で一度方策の更新を行う）
         StepNumPerIteration
         SaveExperiences
-        
-        stepMode
-        
-        experienceBuffer
-        experienceBufferCount = 0
     end
     
     
@@ -140,6 +136,9 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         function set.AgentOptions(this, NewOptions)
             validateattributes(NewOptions,{'rl.option.rlLQTAgentOptions'},{'scalar'},'','AgentOptions');
             
+            % check if the experience buffer needs to be rebuild
+            rebuildExperienceBuffer = isempty(this.ExperienceBuffer) || ...
+                this.AgentOptions_.StepNumPerIteration ~= NewOptions.StepNumPerIteration;
             % check to see if we need to rebuild the noise model
             rebuildNoise = isempty(this.NoiseModel) || ...
                 ~isequal(this.AgentOptions_.NoiseOptions,NewOptions.NoiseOptions);
@@ -148,6 +147,15 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             this.SampleTime = NewOptions.SampleTime;
             this.StepNumPerIteration = NewOptions.StepNumPerIteration;
             this.SaveExperiences = NewOptions.SaveExperiences;
+            
+            % build the experience buffer if necessary
+            if rebuildExperienceBuffer
+                if isempty(this.ExperienceBuffer)
+                    buildBuffer(this);
+                else
+                    resize(this.ExperienceBuffer,this.AgentOptions_.StepNumPerIteration);
+                end
+            end
             
             % build the noise model if necessary
             if rebuildNoise
@@ -182,26 +190,26 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         function action = learnImpl(obj,exp)
             gamma = obj.AgentOptions.DiscountFactor;
             
-            % Store in experience buffer
-            obj.experienceBufferCount = obj.experienceBufferCount + 1;
-            obj.experienceBuffer{obj.experienceBufferCount} = exp;
+            % Store experiences
+            appendExperience(obj, exp);
             
             
             
             % Wait N steps before updating critic parameters
             N = obj.StepNumPerIteration;
             
-            if obj.experienceBufferCount>=N
+            if obj.ExperienceBuffer.Length>=N
                 oaDim = obj.ObservationInfo.Dimension(1) + obj.ActionInfo.Dimension(1);
-                yBuf = zeros(obj.experienceBufferCount,1);
-                hBuf = zeros(obj.experienceBufferCount,0.5*oaDim*(oaDim+1));
-                TDError = zeros(obj.experienceBufferCount, 1);
-                for i = 1 : obj.experienceBufferCount
+                yBuf = zeros(obj.ExperienceBuffer.Length,1);
+                hBuf = zeros(obj.ExperienceBuffer.Length,0.5*oaDim*(oaDim+1));
+                TDError = zeros(obj.ExperienceBuffer.Length, 1);
+                minibatch = obj.ExperienceBuffer.getLastNData(N);
+                for i = 1 : obj.ExperienceBuffer.Length
                     % Parse the experience input
-                    x = obj.experienceBuffer{i}{1}{1};
-                    u = obj.experienceBuffer{i}{2}{1};
-                    r = obj.experienceBuffer{i}{3};
-                    dx = obj.experienceBuffer{i}{4}{1};
+                    x = minibatch{i}{1}{1};
+                    u = minibatch{i}{2}{1};
+                    r = minibatch{i}{3};
+                    dx = minibatch{i}{4}{1};
                     
                     % In the linear case, critic evaluated at (x,u) is Q1 = theta'*h1,
                     % critic evaluated at (dx,-K*dx) is Q2 = theta'*h2. The target
@@ -241,8 +249,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                 obj.TDBufferSize = obj.TDBufferSize + 1;
                 
                 % Reset the experience buffers
-                obj.experienceBufferCount = 0;
-                obj.experienceBuffer = cell(N, 1);
+                obj.ExperienceBuffer.reset();
                 
 %                 % ゲインKの更新幅が一定以下になったら学習終了
 %                 kNorm = norm((obj.KBuffer{obj.KUpdate} - ...
@@ -314,7 +321,23 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             % reset the noise model
             reset(this.NoiseModel);
         end
-    end    
+    end
+    
+    methods(Hidden)
+        function appendExperience(this,experiences)
+            % append experiences to buffer
+            append(this.ExperienceBuffer,{experiences});
+        end
+    end
+    
+    methods(Access= private)
+        function buildBuffer(this)
+            this.ExperienceBuffer = rl.util.ExperienceBuffer(...
+                this.AgentOptions_.StepNumPerIteration, ...
+                this.ObservationInfo, ...
+                this.ActionInfo);
+        end
+    end
 end
 
 %% local function
