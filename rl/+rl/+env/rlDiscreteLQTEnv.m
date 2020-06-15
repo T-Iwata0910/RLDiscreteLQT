@@ -116,7 +116,7 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
         % Reset environment to initial state and output initial observation
         function initialObservation = reset(this)
             if isempty(this.initState)
-                initialObservation = 10 + 20 * rand(size(this.State, 1), 1);
+                initialObservation = -10 + 20 * rand(size(this.State, 1), 1);
             else
                 initialObservation = this.initState;
             end
