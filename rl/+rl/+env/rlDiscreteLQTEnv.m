@@ -5,6 +5,7 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
         % Augument System
         T;
         B1;
+        C1;
         
         % Augument reward
         Q1;
@@ -19,7 +20,14 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
     
     properties(Access = protected)
         % Initialize internal flag to indicate episode termination
-        IsDone = false        
+        IsDone = false;        
+    end
+    properties (Dependent)
+        EnvironmentOptions;
+    end
+    properties (Access=private)
+        EnvironmentOptions_;
+        timesInARow = 0;
     end
 
     %% Necessary Methods
@@ -31,11 +39,18 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
             obsDim = size(Ad, 2) + size(Fd, 2);
             checkX0 = @(x) size(x, 1) == obsDim;
             p = inputParser();
-            addOptional(p, 'x0', [], checkX0);
+            addOptional(p, 'EnvironmentOptions', []);
+            addParameter(p, 'x0', [], checkX0);
             parse(p, varargin{:});
             
-            % Initialize Observation settings
+            % option check
+            opt = varargin(cellfun(@(x) isa(x, 'rl.option.rlDiscreteLQTEnvOptions'), varargin));
             
+            if isempty(opt)
+                opt{1} = rlDiscreteLQTEnvOptions;
+            end
+            
+            % Initialize Observation settings
             ObservationInfo = rlNumericSpec([obsDim 1]);
             ObservationInfo.Name = 'Augument States of system dynamics and references';
             ObservationInfo.Description = 'x, r';
@@ -48,6 +63,9 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
             % The following line implements built-in functions of RL env
             this = this@rl.env.MATLABEnvironment(ObservationInfo,ActionInfo);
             
+            % Initialize options
+            this.EnvironmentOptions = opt{1};
+            
             % Initialize augument system dynamics
             this.T = blkdiag(Ad, Fd);
             this.B1 = [Bd; zeros(size(Fd, 1), size(Bd, 2))];
@@ -56,9 +74,17 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
             
             % Initialize reward function parameter
             C1 = [Cd -eye(size(Cd, 1))];
+            this.C1 = C1;
             this.Q1 = C1' * Q * C1;
             this.R = R;
         end
+        function set.EnvironmentOptions(obj, NewOptions)
+            validateattributes(NewOptions,{'rl.option.rlDiscreteLQTEnvOptions'},{'scalar'},'','AgentOptions');
+            obj.EnvironmentOptions_ = NewOptions;
+        end
+        function Options = get.EnvironmentOptions(obj)
+            Options = obj.EnvironmentOptions_;
+        end  
         
         % Apply system dynamics and simulates the environment with the 
         % given action for one step.
@@ -71,7 +97,12 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
             Observation = this.State;
             
             % 
-            IsDone = false;
+            if (abs(this.C1*x) < this.EnvironmentOptions.tol)
+                this.timesInARow = this.timesInARow + 1;
+            else
+                this.timesInARow = 0;
+            end
+            IsDone = this.timesInARow >= this.EnvironmentOptions.TimesInARow;
             this.IsDone = IsDone;
             
             % Get reward
@@ -85,7 +116,7 @@ classdef rlDiscreteLQTEnv < rl.env.MATLABEnvironment
         % Reset environment to initial state and output initial observation
         function initialObservation = reset(this)
             if isempty(this.initState)
-                initialObservation = rand(size(this.State, 1), 1);
+                initialObservation = 10 + 20 * rand(size(this.State, 1), 1);
             else
                 initialObservation = this.initState;
             end
