@@ -10,6 +10,7 @@ function Options = rlLQTAgentOptions(varargin)
 %
 % %   DiscountFactor                      Discount factor to apply to future rewards during training
 % %   StepNumPreIteration                 1イテレーションあたりのステップ数
+% %   StopExplorationValue                学習を終了させる値
 % %   SaveExperiences                     ExperienceをAgentに保存するオプション
 % %   NoiseOptions                        Parameters for Ornstein Uhlenbeck noise
 % %       InitialAction                       Initial state of the noise model
@@ -24,6 +25,7 @@ function Options = rlLQTAgentOptions(varargin)
 % ver1.1.0 2020-04-30 割引率を追加
 % ver1.1.0 2020-05-02 ExperienceをAgentに保存するオプションを追加
 % ver1.2.0 2020-05-25 ノイズのモデルを選択できるように変更
+% ver1.3.0 2020-12-31 探索ノイズの終了条件を追加
 
 Options = rl.option.rlLQTAgentOptions(varargin{:});
 

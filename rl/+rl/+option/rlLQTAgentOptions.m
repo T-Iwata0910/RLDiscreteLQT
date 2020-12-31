@@ -10,6 +10,7 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
 %
 % %   DiscountFactor                      Discount factor to apply to future rewards during training
 % %   StepNumPreIteration                 1イテレーションあたりのステップ数
+% %   StopExplorationValue                学習を終了させる値
 % %   SaveExperiences                     ExperienceをAgentに保存するオプション
 % %   NoiseOptions                        Parameters for Ornstein Uhlenbeck noise
 % %       InitialAction                       Initial state of the noise model
@@ -24,11 +25,13 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
 % ver1.1.0 2020-04-30 割引率を追加
 % ver1.1.0 2020-05-02 ExperienceをAgentに保存するオプションを追加
 % ver1.2.0 2020-05-25 ノイズのモデルを選択できるように変更
+% ver1.3.0 2020-12-31 探索ノイズの終了条件を追加
     
     
     properties
         % Number for estimator update
         StepNumPerIteration
+        StopExplorationValue
         SaveExperiences
         NoiseOptions
     end
@@ -39,6 +42,7 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
             
             parser = obj.Parser;
             addParameter(parser, 'StepNumPerIteration', 10);
+            addParameter(parser, 'StopExplorationValue', 0);
             addParameter(parser, 'SaveExperiences', false);
             addParameter(parser, 'NoiseOptions', rl.option.GaussianActionNoise);
             
@@ -46,6 +50,7 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
             parse(parser, varargin{:});
             obj.Parser = parser;
             obj.StepNumPerIteration = parser.Results.StepNumPerIteration;
+            obj.StopExplorationValue = parser.Results.StopExplorationValue;
             obj.SaveExperiences = parser.Results.SaveExperiences;
             obj.DiscountFactor =  parser.Results.DiscountFactor;
             obj.NoiseOptions = parser.Results.NoiseOptions;
@@ -58,6 +63,11 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
         function obj = set.StepNumPerIteration(obj, value)
             validateattributes(value, {'numeric'}, {'scalar', 'real', 'integer', 'positive', 'finite'}, '', 'StepNumPerIteration');
             obj.StepNumPerIteration = value;
+        end
+        
+        function obj = set.StopExplorationValue(obj, value)
+            validateattributes(value, {'numeric'}, {'scalar', 'real', 'nonnegative', 'finite'}, '', 'StopExplorationValue');
+            obj.StopExplorationValue = value;
         end
         
         function obj = set.SaveExperiences(obj, value)

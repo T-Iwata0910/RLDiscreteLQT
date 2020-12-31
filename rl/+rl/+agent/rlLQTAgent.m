@@ -47,9 +47,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
 
         
         
-        % Stop learning value
-        % ゲインの更新幅がこの値以下になったら学習を終了する
-        stopLearningValue
+
         
     end
     
@@ -61,7 +59,13 @@ classdef rlLQTAgent < rl.agent.CustomAgent
         ExperienceBuffer
         
         % 1イテレーションあたりのステップ数（この数で一度方策の更新を行う）
-        StepNumPerIteration
+        StepNumPerIteration        
+        
+        % Stop learning value
+        % ゲインの更新幅がこの値以下になったら学習を終了する
+        StopExplorationValue;
+        StopExplorationFlg = false;
+        
         SaveExperiences
     end
     
@@ -146,6 +150,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             this.AgentOptions_ = NewOptions;
             this.SampleTime = NewOptions.SampleTime;
             this.StepNumPerIteration = NewOptions.StepNumPerIteration;
+            this.StopExplorationValue = NewOptions.StopExplorationValue;
             this.SaveExperiences = NewOptions.SaveExperiences;
             
             % build the experience buffer if necessary
@@ -193,74 +198,76 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             % Store experiences
             appendExperience(obj, exp);
             
-            
-            
-            % Wait N steps before updating critic parameters
-            N = obj.StepNumPerIteration;
-            
-            if obj.ExperienceBuffer.Length>=N
-                oaDim = obj.ObservationInfo.Dimension(1) + obj.ActionInfo.Dimension(1);
-                yBuf = zeros(obj.ExperienceBuffer.Length,1);
-                hBuf = zeros(obj.ExperienceBuffer.Length,0.5*oaDim*(oaDim+1));
-                TDError = zeros(obj.ExperienceBuffer.Length, 1);
-                minibatch = obj.ExperienceBuffer.getLastNData(N);
-                for i = 1 : obj.ExperienceBuffer.Length
-                    % Parse the experience input
-                    x = minibatch{i}{1}{1};
-                    u = minibatch{i}{2}{1};
-                    r = minibatch{i}{3};
-                    dx = minibatch{i}{4}{1};
-                    
-                    % In the linear case, critic evaluated at (x,u) is Q1 = theta'*h1,
-                    % critic evaluated at (dx,-K*dx) is Q2 = theta'*h2. The target
-                    % is to obtain theta such that Q1 - gamma*Q2 = y, that is,
-                    % theta'*H = y. Following is the least square solution.
-                    h1 = computeQuadraticBasis(x,u,oaDim);
-                    h2 = computeQuadraticBasis(dx,-obj.K*dx,oaDim);
-                    H = h1 - gamma* h2;
-                    
-                    yBuf(i, 1) = r;
-                    hBuf(i, :) = H;
-                    
-                    % TD誤差を計算
-                    if verLessThan('rl', '1.2')
-                        TDError(i) = r + gamma * ...
-                            evaluate(obj.Critic, {dx, -obj.K*dx}) - ...
-                                evaluate(obj.Critic, {x, u});
-                    else
-                        buf = r + gamma * getValue(obj.Critic, {dx}, {-obj.K*dx}) - getValue(obj.Critic, {x}, {u});
-                        TDError(i) = buf.extractdata;
+            if ~obj.StopExplorationFlg
+                % Wait N steps before updating critic parameters
+                N = obj.StepNumPerIteration;
+
+                if obj.ExperienceBuffer.Length>=N
+                    oaDim = obj.ObservationInfo.Dimension(1) + obj.ActionInfo.Dimension(1);
+                    yBuf = zeros(obj.ExperienceBuffer.Length,1);
+                    hBuf = zeros(obj.ExperienceBuffer.Length,0.5*oaDim*(oaDim+1));
+                    TDError = zeros(obj.ExperienceBuffer.Length, 1);
+                    minibatch = obj.ExperienceBuffer.getLastNData(N);
+                    for i = 1 : obj.ExperienceBuffer.Length
+                        % Parse the experience input
+                        x = minibatch{i}{1}{1};
+                        u = minibatch{i}{2}{1};
+                        r = minibatch{i}{3};
+                        dx = minibatch{i}{4}{1};
+
+                        % In the linear case, critic evaluated at (x,u) is Q1 = theta'*h1,
+                        % critic evaluated at (dx,-K*dx) is Q2 = theta'*h2. The target
+                        % is to obtain theta such that Q1 - gamma*Q2 = y, that is,
+                        % theta'*H = y. Following is the least square solution.
+                        h1 = computeQuadraticBasis(x,u,oaDim);
+                        h2 = computeQuadraticBasis(dx,-obj.K*dx,oaDim);
+                        H = h1 - gamma* h2;
+
+                        yBuf(i, 1) = r;
+                        hBuf(i, :) = H;
+
+                        % TD誤差を計算
+                        if verLessThan('rl', '1.2')
+                            TDError(i) = r + gamma * ...
+                                evaluate(obj.Critic, {dx, -obj.K*dx}) - ...
+                                    evaluate(obj.Critic, {x, u});
+                        else
+                            buf = r + gamma * getValue(obj.Critic, {dx}, {-obj.K*dx}) - getValue(obj.Critic, {x}, {u});
+                            TDError(i) = buf.extractdata;
+                        end
+                    end
+
+                    % Update the critic parameters based on the batch of
+                    % experiences
+    %                 if (rcond(hBuf'*hBuf) > 1e-16)  % 逆行列が求められない時
+                        theta = (hBuf'*hBuf)\hBuf'*yBuf;
+                        obj.Critic = setLearnableParameterValues(obj.Critic,{theta});
+
+                        % Derive a new gain matrix based on the new critic parameters
+                        obj.K = getNewK(obj);
+                        obj.KUpdate = obj.KUpdate + 1;
+                        obj.KBuffer{obj.KUpdate} = obj.K;
+    %                 end
+                    % Caluclate TD error
+                    obj.TDBuffer(obj.TDBufferSize) = mean(abs(TDError));
+                    obj.TDBufferSize = obj.TDBufferSize + 1;
+
+                    % Reset the experience buffers
+                    obj.ExperienceBuffer.reset();
+
+                    % ゲインKの更新幅が一定以下になったら学習終了
+                    kNorm = norm((obj.KBuffer{obj.KUpdate} - ...
+                        obj.KBuffer{obj.KUpdate-1}));
+                    if (kNorm < obj.StopExplorationValue)
+                        obj.StopExplorationFlg = true;
                     end
                 end
-                
-                % Update the critic parameters based on the batch of
-                % experiences
-%                 if (rcond(hBuf'*hBuf) > 1e-16)  % 逆行列が求められない時
-                    theta = (hBuf'*hBuf)\hBuf'*yBuf;
-                    obj.Critic = setLearnableParameterValues(obj.Critic,{theta});
 
-                    % Derive a new gain matrix based on the new critic parameters
-                    obj.K = getNewK(obj);
-                    obj.KUpdate = obj.KUpdate + 1;
-                    obj.KBuffer{obj.KUpdate} = obj.K;
-%                 end
-                % Caluclate TD error
-                obj.TDBuffer(obj.TDBufferSize) = mean(abs(TDError));
-                obj.TDBufferSize = obj.TDBufferSize + 1;
-                
-                % Reset the experience buffers
-                obj.ExperienceBuffer.reset();
-                
-%                 % ゲインKの更新幅が一定以下になったら学習終了
-%                 kNorm = norm((obj.KBuffer{obj.KUpdate} - ...
-%                     obj.KBuffer{obj.KUpdate-1}));
-%                 if (kNorm < obj.stopLearningValue)
-%                     setStepMode(obj,"sim");
-%                 end
+                % Find and return an action with exploration
+                action = getActionWithExploration(obj,exp{4});
+            else
+                action = getAction(obj,exp{4});
             end
-            
-            % Find and return an action with exploration
-            action = getActionWithExploration(obj,exp{4});
         end
         % Create critic 
         function critic = createCritic(obj)
@@ -320,6 +327,8 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             
             % reset the noise model
             reset(this.NoiseModel);
+            
+            this.StopExplorationFlg = false;
         end
     end
     
