@@ -16,6 +16,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
     % ver1.2.1 2020-05-06 T.Iwata 旧バージョンでQ関数の初期化ができなくなってしまった現象を修正
     % ver1.3.0 2020-05-25 T.Iwata ノイズモデルを追加し，Optionで設定できるように変更
     % ver1.3.1 2020-05-31 T.Iwata ExperienceBufferをRL toolboxのものに変更
+    % ver1.3.2 2021-01-01 T.Iwata sturate関数のバグによって複数行動を出力できなかった問題を修正
     
     % TODO
     
@@ -363,4 +364,38 @@ for r = 1:n
         idx = idx + 1;
     end
 end
+end
+
+function Data = saturate(oaInfo, Data)
+    % SATURATE saturates the data based on rlNumericData spec 
+    % LowerLimit and UpperLimit. 
+    %
+    %  DATA = saturate(NUMERICSPEC, DATA)
+    %   - If NUMERICSPEC is a scalar, DATA can be numeric or a cell
+    %   - If NUMERICSPEC is a vector, DATA should be a cell array
+    %   with the same size as NUMERICSPEC.
+    %   - Extra elements in DATA will be truncated.
+
+    try
+        if iscell(Data)
+            for i = 1:numel(oaInfo)
+                Data{i} = min(max(Data{i}, oaInfo(i).LowerLimit), oaInfo(i).UpperLimit);
+            end
+        else
+            Data = min(max(Data, oaInfo.LowerLimit), oaInfo.UpperLimit);
+        end
+%         Data = Data(1:numel(oaInfo));  % truncate extra elements
+    catch
+        validateattributes(Data, {'numeric','cell'}, {'nonempty'}, '', 'Data');
+        if iscell(Data)
+            validateattributes(Data, {'cell'}, {'vector','nonempty'}, '', 'Data');
+            if (numel(Data) ~= numel(oaInfo))
+                error(message('rl:general:errNumericSaturateMismatchNumel'))
+            end
+        else
+            if numel(oaInfo) ~= 1
+                error(message('rl:general:errNumericSaturateMismatchNumel'))
+            end
+        end
+    end
 end
