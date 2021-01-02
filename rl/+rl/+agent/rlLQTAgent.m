@@ -111,7 +111,7 @@ classdef rlLQTAgent < rl.agent.CustomAgent
             end
             
             if isempty(k0)
-                k0 = rand(1, oaInfo{1}.Dimension(1));
+                k0 = rand(oaInfo{2}.Dimension(1), oaInfo{1}.Dimension(1));
             else
                 k0 = k0{1};
                 validateattributes(k0, {'numeric'}, {'ncols', oaInfo{1}.Dimension(1)}, '', 'k0');
@@ -241,7 +241,8 @@ classdef rlLQTAgent < rl.agent.CustomAgent
                     % Update the critic parameters based on the batch of
                     % experiences
     %                 if (rcond(hBuf'*hBuf) > 1e-16)  % ãtçsóÒÇ™ãÅÇﬂÇÁÇÍÇ»Ç¢éû
-                        theta = (hBuf'*hBuf)\hBuf'*yBuf;
+%                         theta = (hBuf'*hBuf)\hBuf'*yBuf;
+                        theta = pinv(hBuf)*yBuf;
                         obj.Critic = setLearnableParameterValues(obj.Critic,{theta});
 
                         % Derive a new gain matrix based on the new critic parameters
