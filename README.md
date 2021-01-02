@@ -1,4 +1,4 @@
-#
+# rlDiscreteLQT
 
 ## クラスの仕様
 
