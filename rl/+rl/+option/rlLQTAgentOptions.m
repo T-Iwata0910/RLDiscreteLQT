@@ -54,9 +54,6 @@ classdef rlLQTAgentOptions < rl.option.AgentGeneric
             obj.SaveExperiences = parser.Results.SaveExperiences;
             obj.DiscountFactor =  parser.Results.DiscountFactor;
             obj.NoiseOptions = parser.Results.NoiseOptions;
-            
-            parser.KeepUnmatched = false;
-            parse(parser, varargin{:});
         end
 
         % Varidate functions
